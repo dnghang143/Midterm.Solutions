@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Transform Retrieval</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+        input, select, button { margin: 10px 0; width: 100%; padding: 8px; }
+        .img-box img { width: 100px; margin: 10px; }
+        .error { color: red; font-weight: bold; }
+    </style>
+    <script>
+        function toggleMode() {
+            const mode = document.getElementById("mode").value;
+            document.getElementById("string-inputs").style.display = mode === "string" ? "block" : "none";
+            document.getElementById("image-inputs").style.display = mode === "image" ? "block" : "none";
+        }
+        window.onload = toggleMode;
+    </script>
+</head>
+<body>
+    <h1>🔁 Transformation-Based Retrieval</h1>
+    <form method="POST" enctype="multipart/form-data">
+        <label>🔀 Mode:</label>
+        <select name="mode" id="mode" onchange="toggleMode()">
+            <option value="string" {% if result.type == 'string' %}selected{% endif %}>String</option>
+            <option value="image" {% if result.type == 'image' %}selected{% endif %}>Image</option>
+        </select>
+
+        <div id="string-inputs" style="display:none;">
+            <label>🔤 Start string:</label>
+            <input name="start_str" value="{{ request.form.start_str or '' }}" />
+            <label>🎯 Goal string:</label>
+            <input name="goal_str" value="{{ request.form.goal_str or '' }}" />
+        </div>
+
+        <div id="image-inputs" style="display:none;">
+            <label>🖼️ Start image:</label>
+            <input type="file" name="img1" accept="image/*" />
+            <label>🖼️ Goal image:</label>
+            <input type="file" name="img2" accept="image/*" />
+        </div>
+
+        <button type="submit">Convert</button>
+    </form>
+
+    {% if result.error %}
+        <p class="error">{{ result.error }}</p>
+    {% endif %}
+
+    {% if result.path %}
+        <h3>Transformation path ({{ result.cost }})</h3>
+        <ol>
+            {% for step in result.path %}
+                <li>{{ step }}</li>
+            {% endfor %}
+        </ol>
+    {% endif %}
+
+    {% if result.type == 'image' %}
+        <div class="img-box">
+            <h3>Images</h3>
+            <div>
+                <strong>Start:</strong><br>
+                <img src="{{ url_for('static', filename=result.start_img) }}" alt="start image"/>
+            </div>
+            <div>
+                <strong>Goal:</strong><br>
+                <img src="{{ url_for('static', filename=result.goal_img) }}" alt="goal image"/>
+            </div>
+            {% if result.final_img %}
+            <div>
+                <strong>Result:</strong><br>
+                <img src="{{ url_for('static', filename=result.final_img) }}" alt="result image"/>
+            </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</body>
+</html>
