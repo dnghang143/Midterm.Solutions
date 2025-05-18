@@ -2,12 +2,59 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Transform Retrieval</title>
+    <title>Transformation-Based Retrieval</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; }
-        input, select, button { margin: 10px 0; width: 100%; padding: 8px; }
-        .img-box img { width: 100px; margin: 10px; }
-        .error { color: red; font-weight: bold; }
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            max-width: 900px;            margin: auto;
+            background-color: #f8f9fa;
+        }
+        input, select, button {
+            margin: 10px 0;
+            width: 100%;
+            padding: 10px;
+            font-size: 1em;
+        }
+        h1, h3 {
+            text-align: center;
+        }
+        .img-box img {
+            width: 100px;
+            margin: 10px;
+            cursor: pointer;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .preview-img {
+            display: none;
+            margin-top: 10px;
+            width: 100px;
+        }
+        .popup-img {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            max-width: 80%;
+            max-height: 80%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            border: 4px solid #555;
+            border-radius: 10px;
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
     </style>
     <script>
         function toggleMode() {
@@ -15,6 +62,26 @@
             document.getElementById("string-inputs").style.display = mode === "string" ? "block" : "none";
             document.getElementById("image-inputs").style.display = mode === "image" ? "block" : "none";
         }
+
+        function previewImage(input, previewId) {
+            const preview = document.getElementById(previewId);
+            if (input.files && input.files[0]) {
+                preview.src = URL.createObjectURL(input.files[0]);
+                preview.style.display = "block";
+            }
+        }
+
+        function showPopup(imgSrc) {
+            document.getElementById("popup").src = imgSrc;
+            document.getElementById("popup").style.display = "block";
+            document.getElementById("overlay").style.display = "block";
+        }
+
+        function closePopup() {
+            document.getElementById("popup").style.display = "none";
+            document.getElementById("overlay").style.display = "none";
+        }
+
         window.onload = toggleMode;
     </script>
 </head>
@@ -36,12 +103,15 @@
 
         <div id="image-inputs" style="display:none;">
             <label>🖼️ Start image:</label>
-            <input type="file" name="img1" accept="image/*" />
+            <input type="file" name="start_img" accept="image/*" onchange="previewImage(this, 'preview-start')" />
+            <img id="preview-start" class="preview-img" />
+
             <label>🖼️ Goal image:</label>
-            <input type="file" name="img2" accept="image/*" />
+            <input type="file" name="goal_img" accept="image/*" onchange="previewImage(this, 'preview-goal')" />
+            <img id="preview-goal" class="preview-img" />
         </div>
 
-        <button type="submit">Convert</button>
+        <button type="submit">🔄 Convert</button>
     </form>
 
     {% if result.error %}
@@ -49,7 +119,7 @@
     {% endif %}
 
     {% if result.path %}
-        <h3>Transformation path ({{ result.cost }})</h3>
+        <h3>🧭 Transformation path (Cost: {{ result.cost }})</h3>
         <ol>
             {% for step in result.path %}
                 <li>{{ step }}</li>
@@ -57,24 +127,53 @@
         </ol>
     {% endif %}
 
+    {% if result.type == 'string' %}
+        <div>
+            <h3>📝 States</h3>
+            <p><strong>Start:</strong> {{ result.start }}</p>
+            {% for intermediate in result.intermediates %}
+                <p><strong>Intermediate (Step {{ loop.index }}):</strong> {{ intermediate[1] or 'N/A' }}</p>
+            {% endfor %}
+            <p><strong>Goal:</strong> {{ result.goal }}</p>
+            <p><strong>Result:</strong> {{ result.final }}</p>
+        </div>
+    {% endif %}
+
     {% if result.type == 'image' %}
         <div class="img-box">
-            <h3>Images</h3>
+            <h3>🖼️ Image Transformations</h3>
             <div>
                 <strong>Start:</strong><br>
-                <img src="{{ url_for('static', filename=result.start_img) }}" alt="start image"/>
+                <img src="{{ url_for('static', filename='uploads/' + result.start_img) }}"
+                     onclick="showPopup(this.src)" alt="Start image" />
             </div>
+            {% for intermediate in result.intermediates %}
+                <div>
+                    <strong>Intermediate (Step {{ loop.index }}):</strong><br>
+                    {% if intermediate[0] %}
+                        <img src="{{ url_for('static', filename='uploads/' + intermediate[0]) }}"
+                             onclick="showPopup(this.src)" alt="Intermediate image"/>
+                    {% else %}
+                        {{ intermediate[1] or 'N/A' }}
+                    {% endif %}
+                </div>
+            {% endfor %}
             <div>
                 <strong>Goal:</strong><br>
-                <img src="{{ url_for('static', filename=result.goal_img) }}" alt="goal image"/>
+                <img src="{{ url_for('static', filename='uploads/' + result.goal_img) }}"
+                     onclick="showPopup(this.src)" alt="Goal image" />
             </div>
             {% if result.final_img %}
-            <div>
-                <strong>Result:</strong><br>
-                <img src="{{ url_for('static', filename=result.final_img) }}" alt="result image"/>
-            </div>
+                <div>
+                    <strong>Result:</strong><br>
+                    <img src="{{ url_for('static', filename='uploads/' + result.final_img) }}"
+                         onclick="showPopup(this.src)" alt="Result image"/>
+                </div>
             {% endif %}
         </div>
     {% endif %}
+
+    <div class="overlay" id="overlay" onclick="closePopup()"></div>
+    <img class="popup-img" id="popup" onclick="closePopup()" />
 </body>
 </html>

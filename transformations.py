@@ -27,6 +27,9 @@ class TransformationLibraryManager:
     def insert(self, name: str, func: Callable[[Any], Any]):
         self.operators[name] = TransformationOperator(name, func)
 
+    def search(self, name: str) -> TransformationOperator:
+        return self.operators.get(name)
+
     def get_all(self) -> List[TransformationOperator]:
         return list(self.operators.values())
 
@@ -40,15 +43,11 @@ class CostFunctionServer:
     def evaluate(self, name: str, before: Any, after: Any) -> float:
         return self.cost_functions[name].evaluate(before, after)
 
-# Hàm heuristic cho chuỗi
-def heuristic_string(current: str, goal: str) -> float:
-    diff_len = abs(len(goal) - len(current))
-    diff_chars = sum(1 for c1, c2 in zip(current, goal) if c1 != c2)
-    return diff_len + diff_chars
+    def cost_insert(self, name: str, func: Callable[[Any, Any], float]):
+        self.insert(name, func)
 
-# Hàm heuristic cho ảnh
-def heuristic_image(current: Image.Image, goal: Image.Image) -> float:
-    return image_cost(current, goal)
+    def evaluate_call(self, name: str, before: Any, after: Any) -> float:
+        return self.evaluate(name, before, after)
 
 class ObjectConverter:
     def __init__(self, tlm: TransformationLibraryManager, cfs: CostFunctionServer, cost_function_name: str, max_steps=50, heuristic=None):
@@ -59,7 +58,7 @@ class ObjectConverter:
         self.heuristic = heuristic
 
     def convert(self, start: Any, goal: Any) -> Tuple[List[str], float, Any]:
-        queue = [(0, 0, start, [], start)]  # (f_score, g_score, current, path, current_obj)
+        queue = [(0, 0, start, [], start)]
         visited = set()
 
         def obj_hash(obj: Any) -> str:
@@ -86,18 +85,15 @@ class ObjectConverter:
                 try:
                     next_obj = op.apply(current)
                     g_new = cost + self.cfs.evaluate(self.cost_function_name, current, next_obj)
-                    if self.heuristic:
-                        h_new = self.heuristic(next_obj, goal)
-                    else:
-                        h_new = 0
+                    h_new = self.heuristic(next_obj, goal) if self.heuristic else 0
                     f_new = g_new + h_new
-                    heapq.heappush(queue, (f_new, g_new, next_obj, path + [f"{op.name}"], next_obj))
+                    heapq.heappush(queue, (f_new, g_new, next_obj, path + [op.name], next_obj))
                 except Exception:
                     continue
 
         return [], float('inf'), None
 
-# Hàm xử lý ảnh:
+# === Image utility ===
 def open_image(path):
     return Image.open(path).convert("RGB")
 
@@ -109,6 +105,21 @@ def rotate_image(img):
 
 def invert_image(img):
     return ImageOps.invert(img)
+
+def scale_x(img):
+    arr = np.array(img)
+    new_arr = np.repeat(arr, 2, axis=1)
+    return Image.fromarray(new_arr.astype(np.uint8))
+
+def scale_y(img):
+    arr = np.array(img)
+    new_arr = np.repeat(arr, 2, axis=0)
+    return Image.fromarray(new_arr.astype(np.uint8))
+
+def paint(img, color=(255, 0, 255)):
+    arr = np.array(img)
+    arr[arr[:, :, 0] > 100] = color
+    return Image.fromarray(arr.astype(np.uint8))
 
 def image_cost(before: Image.Image, after: Image.Image) -> float:
     a1 = np.array(before).astype(np.int32)
